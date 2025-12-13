@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quantum Density Monte Carlo — Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 1rem; background: #f5f6fb; color: #111; }
+    .container { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 1rem; }
+    textarea { width: 100%; min-height: 6rem; font-family: monospace; }
+    button { padding: 0.6rem 1rem; font-size: 1rem; }
+    .images { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 0.5rem; }
+    .card { background: white; padding: 0.5rem; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    img { width: 100%; height: auto; display:block; }
+    pre { background:#111; color:#fff; padding:0.5rem; overflow:auto; }
+    @media (max-width:600px){ h1{font-size:1.1rem} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Interactive demo (prototype)</h1>
+    <p>Enter JSON parameters for the simulation and click Run. Example: {"grid_size": 128}</p>
+
+    <div class="controls">
+      <textarea id="params">{ "grid_size": 128 }</textarea>
+      <div style="min-width:200px; align-self:start; display:flex; flex-direction:column; gap:8px;">
+        <button id="runBtn">Run</button>
+        <button id="dockerBtn">Docker run (instructions)</button>
+      </div>
+    </div>
+
+    <div id="summary"></div>
+
+    <div class="images">
+      <div class="card"><h4 style="margin:0.25rem 0">Entropy</h4><img id="img-entropy" src="" alt="entropy" /></div>
+      <div class="card"><h4 style="margin:0.25rem 0">Expected points</h4><img id="img-expected" src="" alt="expected" /></div>
+      <div class="card"><h4 style="margin:0.25rem 0">Composite F</h4><img id="img-composite" src="" alt="composite" /></div>
+    </div>
+
+    <h3>Raw response</h3>
+    <pre id="raw"></pre>
+  </div>
+
+  <script>
+    const runBtn = document.getElementById('runBtn');
+    const dockerBtn = document.getElementById('dockerBtn');
+    const paramsEl = document.getElementById('params');
+    const rawEl = document.getElementById('raw');
+    const summaryEl = document.getElementById('summary');
+
+    function setImage(id, b64) {
+      const el = document.getElementById(id);
+      if (!b64) {
+        el.src = '';
+        return;
+      }
+      el.src = 'data:image/png;base64,' + b64;
+    }
+
+    runBtn.addEventListener('click', async () => {
+      let params;
+      try {
+        params = JSON.parse(paramsEl.value);
+      } catch (e) {
+        alert('Invalid JSON: ' + e.message);
+        return;
+      }
+      rawEl.textContent = 'Running...';
+      summaryEl.textContent = '';
+
+      try {
+        const res = await fetch('/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params)
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          rawEl.textContent = 'Error: ' + res.status + '\n' + txt;
+          return;
+        }
+        const json = await res.json();
+        rawEl.textContent = JSON.stringify(json, null, 2);
+        setImage('img-entropy', json.images?.entropy);
+        setImage('img-expected', json.images?.expected);
+        setImage('img-composite', json.images?.composite);
+        summaryEl.innerHTML = '<strong>Summary</strong><pre>' + JSON.stringify(json.summary, null, 2) + '</pre>';
+      } catch (err) {
+        rawEl.textContent = 'Fetch error: ' + err;
+      }
+    });
+
+    dockerBtn.addEventListener('click', () => {
+      alert('To run in Docker:\n\ncd viz/web\ndocker build -t quantum-demo .\ndocker run -p 8000:8000 quantum-demo\n\nThen visit http://localhost:8000/static/index.html (or open the static file)');
+    });
+  </script>
+</body>
+</html>
